@@ -9,6 +9,5 @@
 
 3.Who is the best coach in premier league history.
 
-![](images/images-01.jpg){width="100"}
+![](images/images-01.jpg)
 
-![]()
