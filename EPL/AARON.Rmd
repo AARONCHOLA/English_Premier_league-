@@ -1,0 +1,1002 @@
+---
+title: "English Pemier League"
+author: "aaron chola"
+date: "`r Sys.Date()`"
+output: html_document
+toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# [`English Premier League Analysis`]{.underline}
+
+#### In this project will answer the following questions
+
+1.Does the home stadium give an advantage and if yes how?![]()
+
+2.What is the best way of winning matches, is it defensive or attacking.
+
+3.Who is the best coach in premier league history.
+
+![](images/images-01.jpg){width="602"}
+
+![]()
+
+### Loading data
+
+```{r}
+Data<-read.csv("C:\\Users\\CHOLA\\Desktop\\my_data.csv")
+head(Data)
+```
+
+```{r}
+names(Data)
+```
+
+### Loading the library for data analysis
+
+```{r}
+library(tidyverse)
+```
+
+#### Data manipulation and data cleaning using dplr
+
+```{r}
+PL<-Data %>%
+  arrange(Season_End_Year,Wk)%>%
+  select(Season_End_Year,Wk,Date,Home,HomeGoals,AwayGoals,Away,Date) %>% mutate(Date=ymd(Date))
+```
+
+This shows that for 2023-2024 Company we are remaining with 131 games
+
+```{r}
+colSums(is.na(PL))
+```
+
+We now exclude the un played matches
+
+```{r}
+str(PL)
+```
+
+We now add the final description of home,away and draw(H=Home Win, D=Draw, A=Away Win)
+
+```{r}
+PL$FTR<- case_when(
+                  PL$HomeGoals>PL$AwayGoals~"HOME_WINS",
+                  PL$HomeGoals<PL$AwayGoals~"AWAY_WINS",
+                  PL$HomeGoals==PL$AwayGoals~"DRAWS"
+                     )
+```
+
+# Data processsing
+
+Descriptive by summary
+
+```{r}
+summary(PL)
+```
+
+We see that week has a maximum of 42 which means games are played within 42 weeks
+
+```{r}
+table(PL$Season_End_Year)
+```
+
+We see that from 1993 to 1995 the number of games that were played were 462 this is because by then the number of teams were 22 and were reduced to 20 in 1996.
+
+-   **We will now answer the first question ,which is if the home stadium gives an advantage and find out with what chances.**
+
+```{r}
+#We are going to generate a new dataframe that includes the percentage of different game results, where 'H' denotes a home team win, 'A' denotes an away team win, and 'D' denotes a draw.
+Home_vs_Away<-count(PL,FTR) %>% arrange(desc(n))
+
+Home_vs_Away$percentage<-(Home_vs_Away$n/sum((Home_vs_Away$n)))*100
+```
+
+```{r}
+  ggplot(data = Home_vs_Away,aes(x=reorder(FTR,-percentage),y=percentage))+
+    geom_col()+labs(title = "Percentage winning rate")
+```
+
+```{r}
+home_vs_away<-na.omit(Home_vs_Away)
+
+ggplot(data=home_vs_away,mapping = aes(x=FTR,y=percentage))+geom_col()+coord_flip()+labs(title = "Games won at Home and away")
+```
+
+By comparing the win percentages for home and away games, you can quantify the advantage of playing at the home ground. Typically, you would expect the win percentage for home games to be higher than for away games, indicating a home ground advantage.
+
+The **NA** shows the number of games not played as this data goes up to 2024 company and we still have remaining games.
+
+As We see that the number of games won at Home were greater than the draws and away games.
+
+Now we will find out with what chances or probability do teams have of wining at home and away.
+
+```{r}
+
+home_vs_away$probability<-(home_vs_away$n/sum((home_vs_away$n)))
+home_vs_away
+
+```
+
+By calculating the probability using the equation $P(A) = {n(S) \over n(A)}$ Where:
+
+-   $P(A)$ is the probability of an outcome
+
+-   $n(S)$ is the number of favorable outcomes for event $A$.
+
+-   $n(S)$ is the total number of possible outcomes in the sample space.
+
+We see that the probability of wining at home is $0.4587373$ and hence we can conclude that teams have great chances of winning at home than away.
+
+```{r}
+## new dataframe counting final results by every year
+point_year<-PL%>%
+  group_by(Season_End_Year)%>%
+  count(FTR)
+point_year
+```
+
+We will now calculate the number of points by away game and home games
+
+```{r}
+## calculating the points that collected in a home and away ground
+point_year$points<-case_when(point_year$FTR=="HOME_WINS"~point_year$n*3,
+                             point_year$FTR=="AWAY_WINS"~point_year$n*3,
+                             point_year$FTR=="DRAWS"~point_year$n*1
+                             )
+point_year
+```
+
+We will now find the number of points accumulated at home and away in each year
+
+```{r}
+## creating a new column"h_points" that summation points that collected in home ground either "h_points" to away points
+point_year2<-na.omit(point_year)%>%
+  group_by(Season_End_Year)%>%
+  summarize(home_points=points[FTR=="HOME_WINS"]+points[FTR=="DRAWS"],away_points=(points[FTR=="AWAY_WINS"])+points[FTR=="DRAWS"])
+point_year2
+```
+
+We will now make the table in to a tidy table
+
+```{r}
+## tidying the data
+point_year3<-point_year2%>%
+  pivot_longer(c(`home_points`, `away_points`), names_to = "Home_vs_Away", values_to = "Points")
+point_year3
+```
+
+```{r}
+ggplot(data = point_year3,aes(x=Season_End_Year,y=Points,col=Home_vs_Away))+
+  geom_line()+
+  theme(legend.title=element_blank())+
+  theme(legend.position=c(0.9,0.9))+
+  scale_color_manual(labels = c("Away", "Home"),
+                     values = c( "red", "blue"))+
+  ggtitle("Total points collected by the teams Home vs Away")+
+  xlab("Season end year")+
+  ylab("Total points")
+```
+
+We see that in $2020$ things changed, the away games won are more than the home games. We will try to evaluate and see what cold be the cause of this.
+
+**The home winning percetage through the years**
+
+```{r}
+## new dataframe counting the Home, Away and Draw through the years
+home_vs_away_years<-PL %>%
+  group_by(Season_End_Year,FTR)%>%
+  count(FTR)
+
+##the percentage of every case
+home_vs_away_years$Season_End_Year<-as.numeric(home_vs_away_years$Season_End_Year)
+
+home_vs_away_years$percentage<- case_when(
+  home_vs_away_years$Season_End_Year==1993~home_vs_away_years$n*100/462,
+  home_vs_away_years$Season_End_Year==1994~home_vs_away_years$n*100/462,
+  home_vs_away_years$Season_End_Year==1995~home_vs_away_years$n*100/462,
+  TRUE ~ home_vs_away_years$n*100/380
+                                         )
+
+home_vs_away_year<-na.omit(home_vs_away_years)
+
+home_vs_away_year
+```
+
+We will now find the year with the **highest away win**
+
+```{r}
+away_games_year<-home_vs_away_year %>% filter(FTR=="AWAY_WINS")
+
+ggplot(data = away_games_year,mapping = aes(x=Season_End_Year,y=percentage))+geom_line()+labs(title = "Plot of the away games winning percentage"  )
+
+```
+
+We can see that the percentage of wining away games was higher in 2020 , the reason is because in $2020$ we had Covid-19 so supporters were not allowed to watch football on stadium , everything was virtue . Hence we can conclude that supporters play a pivot role to ensure home win games.
+
+plotting the Home winning percentage through the years
+
+```{r}
+Home_wins<-home_vs_away_year %>% filter(FTR=="HOME_WINS")
+ggplot(data = Home_wins,mapping = aes(x=Season_End_Year,y=percentage))+geom_line()+labs(title = "Home winning percentage")
+```
+
+**Observation**
+
+The home team's success rate remained consistently above 40% over the years until experiencing a notable decline in 2021, before eventually rebounding to its usual levels. We will revisit this particular scenario later in our analysis to determine its potential influence on scoring goals at the home stadium.
+
+Now we will try to find the effect home field have on the number of goals scored?
+
+```{r}
+home_goals_vs_away_goals<-PL %>%
+  group_by(Season_End_Year)%>%
+  summarise(all_home_goals=sum(HomeGoals),all_away_goals=sum(AwayGoals))
+```
+
+we can now make the table tidy
+
+```{r}
+home_goals_vs_away_goals2<-home_goals_vs_away_goals %>% pivot_longer(cols = c('all_home_goals','all_away_goals'),names_to = 'Home_and_away_goals',values_to = 'total_goals')
+home_vs_away_goals3<-na.omit(home_goals_vs_away_goals2)
+```
+
+```{r}
+ggplot(data = home_vs_away_goals3,mapping = aes(x=Season_End_Year,y=total_goals,col=Home_and_away_goals,))+geom_line()
+```
+
+The home advantage, evident in both points accumulation and goal-scoring throughout the years, was disrupted notably in $2021$. Upon closer examination of this period, it became apparent that $2021$ coincided with the onset of the COVID-19 pandemic, resulting in matches being played without spectators. Delving deeper into this timeframe, data from "premierleague.com" reveals that the last 92 matches of the $2019-2020$ season were played behind closed doors, and the entirety of the $2020–21$ season followed suit, with only brief exceptions in December $2020$ and May $2021$ when limited numbers of fans were permitted. This prompts us to investigate the impact of crowd absence throughout the $2020–2021$ season on various aspects of the game.
+
+```{r}
+## new dataframe with only results of 2020-2021 season
+season_2021<-subset(PL,Season_End_Year=="2021")
+```
+
+Home vs Away winning in 2021 season
+
+```{r}
+point_2021<-season_2021%>%
+  group_by(Season_End_Year)%>%
+  count(FTR)
+point_2021
+```
+
+plotting the result
+
+```{r}
+ggplot(data =point_2021,mapping=aes(x=FTR,y=n))+
+  geom_col()+coord_flip()+
+  ggtitle("Home vs Away winning in 2021 season")+
+  ylab("Numbers of matches")+
+  xlab("The Results")
+```
+
+The absence of a crowd has evidently nullified the home advantage in sports. Now, shifting our focus to team analysis, we'll begin by identifying the team with the highest number of victories at their home stadium.
+
+This exploration will provide insights into teams' strengths and performances in their familiar home environments.
+
+```{r}
+## new dataframe to calculate the home results for each PL team
+home_point<-PL %>%
+  group_by(Home)%>%
+  count(FTR)
+Home_points<-na.omit(home_point)
+
+## replacing "H" by "W" for winning, "A" by "L" for losing and "D" still "D" for draw
+Home_points$FTR[Home_points$FTR=="HOME_WINS"]<-"W"
+Home_points$FTR[Home_points$FTR=="AWAY_WINS"]<-"L"
+Home_points$FTR[Home_points$FTR=="DRAWS"]<-"D"
+
+## calculating the points collected at home ground by each team
+## as we know the winning team get three points, the losing team take nothing, and 1 point for each team during draw
+Home_points$points<- case_when(Home_points$FTR=="L"~Home_points$n*0,
+                               Home_points$FTR=="W"~Home_points$n*3,
+                               Home_points$FTR=="D"~Home_points$n*1
+                               )
+                               
+home_point2<-Home_points%>%
+  group_by(Home)%>%
+  summarize(T_point=sum(points))
+```
+
+plotting the result of points in home ground
+
+```{r}
+ggplot(data = home_point2,aes(x=T_point,y=reorder(Home,T_point),fill=Home))+
+  geom_col()+
+  ggtitle("Points by team in Home ground")+
+  ylab("Team")+
+  xlab("Points")
+```
+
+Manchester United stands out as the team with the highest number of points accumulated at their home stadium, followed closely by Arsenal, Liverpool, and Chelsea.
+
+Let's move to the other side and see the teams' performances individually in away matches.
+
+```{r}
+## new dataframe to calculate the home results for each PL team
+away_point<-PL %>%
+  group_by(Away)%>%
+  count(FTR)
+Away_point<-na.omit(away_point)
+
+## replacing "H" by "L" for losing, "A" by "W" for winning and "D" still "D" for draw
+Away_point$FTR[Away_point$FTR=="HOME_WINS"]<-"L"
+Away_point$FTR[Away_point$FTR=="AWAY_WINS"]<-"W"
+Away_point$FTR[Away_point$FTR=="DRAWS"]<-"D"
+
+## calculating the points collected at away ground by each team
+## as we know the winning team get three points, the losing team take nothing, and 1 point for each team during draw
+Away_point$points<- case_when(Away_point$FTR=="L"~Away_point$n*0,
+                              Away_point$FTR=="W"~Away_point$n*3,
+                              Away_point$FTR=="D"~Away_point$n*1
+                              )
+
+away_point2<-Away_point%>%
+  group_by(Away)%>%
+  summarize(T_point=sum(points))
+
+
+```
+
+plotting the result of away point accumulated
+
+```{r}
+ggplot(data = away_point2,aes(x=T_point,y=reorder(Away,T_point),fill=Away))+
+  geom_col()+
+  ggtitle("Points by team in Away ground")+
+  ylab("Team")+
+  xlab("Points")
+  
+```
+
+Manchester United holds the top position in terms of points collected at their home stadium, with Chelsea, Arsenal, and Liverpool following closely behind.
+
+**We will now try to find What is the best way of winning matches, is it defensive or attacking.**
+
+In this section, we'll evaluate different techniques for collecting points based on their offensive and defensive capabilities, primarily through goals scored and goals received. We'll analyze the number of goals scored and the average points collected by the team, as well as the number of goals conceded and the average points collected.
+
+```{r}
+## to see how many Home teams scored by end of the match
+table(PL$HomeGoals)
+```
+
+```{r}
+## to see how many Away teams scored by end of the match
+table(PL$AwayGoals)
+```
+
+We see that both scores are in the range of 0 to 9
+
+```{r}
+PL_r<-na.omit(PL)
+```
+
+```{r}
+## creating a matrix with 4 variables
+## variable for goals the team scored in a match "Goal_scored" and next to it the average point they got "points_s",
+## and  variable for goals the team received in a match "Goal_received" and next to it the average point they got "points_A".
+## and our observations the range from 0 to 9
+matrix<-matrix(nrow = 10,ncol = 4)
+colnames(matrix)=c("Goal_scored","points_s","Goal_received","points_A")
+matrix[,1]<-c(0:9)
+matrix[,3]<-c(0:9)
+
+## creating a loop to calculate the average point when scoring a goals in a range from 0 to 9
+for(i in 0:9) 
+{
+## in Home ground 
+  home_score_i<-subset(PL_r,PL_r$HomeGoals==i)
+  
+  home_score_i$points_h_i<-case_when(home_score_i$FTR=="HOME_WINS"~3,
+                                     home_score_i$FTR=="DRAWS"~1,
+                                     home_score_i$FTR=="AWAY_WINS"~0
+                                     )
+  all_points_gains_at_home_when_scored_i<-sum(home_score_i$points_h_i)
+ 
+ ## in away grounds
+  away_score_i<-subset(PL_r,PL_r$AwayGoals==i)
+  
+  away_score_i$points_a_i<-case_when(away_score_i$FTR=="HOME_WINS"~0,
+                                     away_score_i$FTR=="DRAWS"~1,
+                                     away_score_i$FTR=="AWAY_WINS"~3
+                                     )
+  all_points_gains_at_away_when_scored_i<-sum(away_score_i$points_a_i)
+  
+  all_points_gains_when_scored_i<-all_points_gains_at_away_when_scored_i+all_points_gains_at_home_when_scored_i
+  
+  average_points_when_scored_i<-all_points_gains_when_scored_i/(nrow(home_score_i)+nrow(away_score_i))
+  
+  matrix[i+1,2]<-(average_points_when_scored_i)
+}
+
+## creating a loop to calculate the average point when receiving a goals in a range from 0 to 9
+for(j in 0:9)
+  
+{
+## in Home ground
+  home_against_j<-subset(PL_r,PL_r$AwayGoals==j)
+  home_against_j$points_h_j<-case_when(home_against_j$FTR=="HOME_WINS"~3,
+                                       home_against_j$FTR=="DRAWS"~1,
+                                       home_against_j$FTR=="AWAY_WINS"~0
+                                       )
+  all_points_gains_at_home_when_against_j<-sum(home_against_j$points_h_j)
+  
+  ## in Away grounds
+  away_against_j<-subset(PL_r,PL_r$HomeGoals==j)
+  away_against_j$points_a_j<-case_when(away_against_j$FTR=="HOME_WINS"~0,
+                                       away_against_j$FTR=="DRAWS"~1,
+                                       away_against_j$FTR=="AWAY_WINS"~3
+                                       )
+  all_points_gains_at_away_when_against_j<-sum(away_against_j$points_a_j)
+  
+  all_points_gains_when_against_j<-all_points_gains_at_away_when_against_j+all_points_gains_at_home_when_against_j
+  
+  average_points_when_against_j<-all_points_gains_when_against_j/(nrow(home_against_j)+nrow(away_against_j))
+  
+  matrix[j+1,4]<-(average_points_when_against_j)
+  
+}
+goals_points<-as.data.frame(matrix)
+```
+
+```{r}
+head(goals_points,10)
+```
+
+```{r}
+## tidying and plotting the data
+
+goals_points2<-goals_points%>%
+  pivot_longer(c(`points_s`, `points_A`), names_to = "scored_vs_against", values_to = "Points")
+
+ggplot(data = goals_points2,aes(x=Goal_scored,y=Points,col=scored_vs_against))+
+  geom_line()+
+  theme(legend.title=element_blank())+
+  theme(legend.position=c(0.05,0.94))+
+  scale_color_manual(labels = c("against", "scored"),
+  values = c( "red", "blue"))+
+  ggtitle("average points when the teams scored vs received a goals")+
+  xlab("Goals")+
+  ylab("points")
+```
+
+The outcome is somewhat unexpected, as it reveals that, on average, a team that keeps a clean sheet gathers 2.43 points, surpassing the average of 2.13 points collected by a team scoring two goals. Additionally, a team conceding only one goal accumulates more points on average than a team scoring just one goal.
+
+```{r}
+## creating a list that will contain every PL table
+PL_Table<-list()
+
+## creating a loop to deal with the data year by year
+for(i in 1993:2022)
+{
+## creating subset contain every year results
+PL_r_i<-subset(PL_r,PL_r$Season_End_Year==i)
+
+## count of home goals, scored and against
+
+PL_r_hgi<-PL_r_i%>%
+  group_by(Home)%>%
+  summarize(goal_scored_at_home=sum(HomeGoals),
+            goal_against_at_home=sum(AwayGoals))
+
+## count of away goals, scored and against
+PL_r_agi<-PL_r_i%>%
+  group_by(Away)%>%
+  summarize(goal_scored_at_away=sum(AwayGoals),
+            goal_against_at_away=sum(HomeGoals))
+
+##home_and_away_goals
+
+goals_i<-cbind(PL_r_hgi,PL_r_agi)
+goals_i$GS<-(goals_i$goal_scored_at_away)+(goals_i$goal_scored_at_home)
+goals_i$GA<-(goals_i$goal_against_at_away)+(goals_i$goal_against_at_home)
+goals_i$GD<-(goals_i$GS)-(goals_i$GA)
+
+goals2_i<-goals_i%>%
+  select(Home,GS,GA,GD)
+
+##home result
+PL_r_hri<-PL_r_i%>%
+  group_by(Home)%>%
+  count(FTR)
+
+PL_r_hri$W<-case_when(PL_r_hri$FTR=="HOME_WINS"~PL_r_hri$n*1,
+                      PL_r_hri$FTR=="DRAWS"~0,
+                      PL_r_hri$FTR=="AWAY_WINS"~0
+                       )
+
+PL_r_hri$D<-case_when(PL_r_hri$FTR=="HOME_WINS"~0,
+                      PL_r_hri$FTR=="DRAWS"~PL_r_hri$n*1,
+                      PL_r_hri$FTR=="AWAY_WINS"~0
+                   )
+
+PL_r_hri$L<-case_when(PL_r_hri$FTR=="HOME_WINS"~0,
+                      PL_r_hri$FTR=="DRAWS"~0,
+                      PL_r_hri$FTR=="AWAY_WINS"~PL_r_hri$n*1
+                    )
+
+PL_r2_hri<-PL_r_hri%>%
+  group_by(Home)%>%
+  summarize(Wh=sum(W),Dh=sum(D),Lh=sum(L))
+
+PL_r2_hri$hpoints<-(PL_r2_hri$Wh*3)+(PL_r2_hri$Dh*1)
+
+##away result
+PL_r_ari<-PL_r_i%>%
+  group_by(Away)%>%
+  count(FTR)
+
+PL_r_ari$W<-case_when(PL_r_ari$FTR=="HOME_WINS"~0,
+                      PL_r_ari$FTR=="DRAWS"~0,
+                      PL_r_ari$FTR=="AWAY_WINS"~PL_r_ari$n*1
+                       )
+
+PL_r_ari$D<-case_when(PL_r_ari$FTR=="HOME_WINS"~0,
+                      PL_r_ari$FTR=="DRAWS"~PL_r_ari$n*1,
+                      PL_r_ari$FTR=="AWAY_WINS"~0
+                      )
+
+PL_r_ari$L<-case_when(PL_r_ari$FTR=="HOME_WINS"~PL_r_ari$n*1,
+                      PL_r_ari$FTR=="DRAWS"~0,
+                      PL_r_ari$FTR=="AWAY_WINS"~0
+                      )
+
+PL_r2_ari<-PL_r_ari%>%
+  group_by(Away)%>%
+  summarize(Wa=sum(W),Da=sum(D),La=sum(L))
+
+PL_r2_ari$apoints<-(PL_r2_ari$Wa*3)+(PL_r2_ari$Da*1)
+
+##home and away points
+
+points_i<-cbind(PL_r2_ari,PL_r2_hri)
+
+points_i$W<-(points_i$Wa)+(points_i$Wh)
+points_i$D<-(points_i$Da)+(points_i$Dh)
+points_i$L<-(points_i$La)+(points_i$Lh)
+points_i$points<-(points_i$apoints)+(points_i$hpoints)
+
+points2_i<-points_i%>%
+  select(Away,W,D,L,points)
+
+Table_i<-cbind(goals2_i,points2_i)
+
+Table2_i<-Table_i%>%
+  select(Home,W,D,L,GS,GA,GD,points)
+
+Table3_i<-arrange(Table2_i,desc(points),desc(GD),desc(GS))
+
+names(Table3_i)[names(Table3_i) == 'Home'] <- 'Team'
+
+Table3_i$Season<-paste0(i-1,"/",i)
+Table3_i$Rank<-1:case_when(i==1993~22,
+                           i==1994~22,
+                           i==1995~22,
+                           TRUE ~ 20)
+
+Table3_i<-Table3_i[,c(9,10,1,2,3,4,5,6,7,8)]
+
+
+PL_Table[[i]]<-Table3_i
+}
+```
+
+testing the result
+
+```{r}
+PL_Table[[2022]]
+```
+
+**How many points collecting by the winner of the PL through the years**
+
+```{r}
+winner_points<-matrix(nrow = 30,ncol = 2)
+colnames(winner_points)=c("Season_End_Year","winner_points")
+winner_points<-as.data.frame(winner_points)
+winner_points$Season_End_Year<-1993:2022
+for (i in 1993:2022)
+{  
+  wi<-PL_Table[[i]]$points[PL_Table[[i]]$Rank==1]
+  
+  winner_points[i-1992,2]<-wi
+}
+
+```
+
+plotting the result
+
+```{r}
+ggplot(data=winner_points)+
+  aes(x=Season_End_Year,y=winner_points)+
+  geom_line()+
+  ggtitle("points of winners of the PL")+
+  xlab("Season End Year")+
+  ylab("Points")
+```
+
+From this we see that in order for a Team to Win EPL it should accumulate at least 75 points.
+
+```{r}
+winners_of_pl<-matrix(nrow = 30,ncol = 2)
+winners_of_pl<-as.data.frame(winners_of_pl)
+names(winners_of_pl)=c("Season_End_Year","winner")
+for(i in 1993:2022)
+{
+  winners_of_pl[i-1992,1]<-paste0(i)
+  winner_i<-PL_Table[[i]]$Team[PL_Table[[i]]$Rank==1]
+  winners_of_pl[i-1992,2]<-winner_i
+}
+
+n_winners_of_pl<-winners_of_pl%>%
+  group_by(winner)%>%
+  count(winner)%>%
+  arrange(desc(n))
+  
+## plotting the result  
+  ggplot(data = n_winners_of_pl,aes(x=n,y=reorder(winner,n),fill=winner))+
+  geom_col()+
+  ggtitle("Winners of PL")+
+  ylab("Team")+
+  xlab("Numbers of winning times")+
+  theme(legend.position="none")
+```
+
+It's clear that Manchester United has been the dominant force in the Premier League, having won numerous titles and trophies, with their last triumph being a decade ago. Upon investigation, it became apparent that a significant factor during their dominance was the coaching of Sir Alex Ferguson. This prompted us to explore the differences between Manchester United under Ferguson's management and their performance post-Ferguson era. Additionally, we delved into analyzing coaches in the Premier League, focusing on those who have won the title twice or more, in an attempt to determine the best coach in the league's history.
+
+**We now move to our final analysis of Who is the best coach in premier league history.**
+
+We will start analysis each manage with the club they managed , among the manager we will analyse the following ***Sir Alex Ferguson***, ***Pep Guardiola*** ,***Jürgen Klopp*** and ***José Mourinho*** .
+
+-   We will start with **Sir Alex ferguson** of Manchester united
+
+    It's evident that Manchester United has been the most successful club in terms of titles and trophies in the Premier League, with their last triumph occurring a decade ago. During our research, we noted that a key factor in Manchester United's dominance was the coaching tenure of Sir Alex Ferguson. This prompted us to explore the disparities between Manchester United under Ferguson's management and their performance post-Ferguson era. Furthermore, we sought to investigate the coaches in the Premier League, specifically focusing on those who have won the title twice or more, in order to determine who could be considered the best coach in the league's history.
+
+    ![](images/gettyimages-168612184-612x612.jpg)
+
+```{r}
+## new subset with home results of Manchester United during the period of Sir Alex Ferguson
+sir_home<-subset(PL_r,Home=="Manchester Utd"&Season_End_Year<=2013)%>%
+  arrange(Season_End_Year,Wk)
+head(sir_home)
+
+## new subset with away results of Manchester United during the period of Sir Alex Ferguson
+sir_away<-subset(PL_r,Away=="Manchester Utd"&Season_End_Year<=2013)%>%
+  arrange(Season_End_Year,Wk)
+head(sir_away) 
+ 
+##sir points at home
+sir_home_point<-sir_home%>%
+  group_by(FTR)%>%
+  count(FTR)
+sir_home_point$points<-case_when(sir_home_point$FTR=="HOME_WINS"~sir_home_point$n*3,
+                                 sir_home_point$FTR=="DRAWS"~sir_home_point$n*1,
+                                 sir_home_point$FTR=="AWAY_WINS"~sir_home_point$n*0
+                                 )
+head(sir_home_point)
+
+## sir points away home ground
+sir_away_point<-sir_away%>%
+  group_by(FTR)%>%
+  count(FTR)
+sir_away_point$points<-case_when(sir_away_point$FTR=="HOME_WINS"~sir_away_point$n*0,
+                                 sir_away_point$FTR=="DRAWS"~sir_away_point$n*1,
+                                 sir_away_point$FTR=="AWAY_WINS"~sir_away_point$n*3
+                                 )
+head(sir_away_point)
+
+## sir goals
+
+##home
+sir_goals_home<-sir_home%>%
+  group_by(Home)%>%
+  summarize(all_home_goal=sum(sir_home$HomeGoals),all_home_goal_against=sum(sir_home$AwayGoals))
+head(sir_goals_home) 
+
+##away
+sir_goals_away<-sir_away%>%
+  group_by(Away)%>%
+  summarize(all_away_goal=sum(sir_away$AwayGoals),all_away_goal_against=sum(sir_away$HomeGoals))
+head(sir_goals_away)
+
+```
+
+Let now see the wins of sir alex at home
+
+```{r}
+sir_home_point %>% ggplot(mapping = aes(x=FTR,y=n))+geom_col()+ggtitle("Sir Alex home games")
+```
+
+Lets now calculate the probability of sir Alex wins ,loses and draws at home
+
+```{r}
+sir_home_point$Probabity<-sir_home_point$n/405
+sir_home_point
+```
+
+We see that Sir Alex had $0.75$ of wining at home ,$0.16$ drawing and $0.083$ losing
+
+Let's now see how sir performed away games
+
+```{r}
+sir_away_point %>% ggplot(mapping = aes(x=FTR,y=n))+geom_col()+ggtitle("The number of games sir won at home")
+```
+
+Lets now calculate sir away wining probability
+
+```{r}
+sir_away_point$Probability <-sir_away_point$n/405
+sir_away_point
+```
+
+We sir that sir Alex away wining probability was $0.55$ drawing $0.25$ Losing $0.197$
+
+-   We will now move to **Pep Guardiola** of Machester City
+
+    ![](images/pep-01.jpg)
+
+    Pep Guardiola commenced his tenure as Manchester City's coach at the onset of the 2017 season and has continued in the role up to the present day.
+
+    ```{r}
+    ## new subset with home results of Manchester City during the period of Pep Guardiola
+    pep_home<-subset(PL_r,Home=="Manchester City"&Season_End_Year>=2017)%>%
+      arrange(Season_End_Year,Wk)
+    head(pep_home)
+
+    ## new subset with away results of Manchester City during the period of Pep Guardiola
+    pep_away<-subset(PL_r,Away=="Manchester City"&Season_End_Year>=2017)%>%
+      arrange(Season_End_Year,Wk)
+    head(pep_away)
+
+    ## Pep points at home ground
+    pep_home_point<-pep_home%>%
+      group_by(FTR)%>%
+      count(FTR)
+    pep_home_point$points<-case_when(pep_home_point$FTR=="HOME_WINS"~pep_home_point$n*3,
+                                     pep_home_point$FTR=="DRAWS"~pep_home_point$n*1,
+                                     pep_home_point$FTR=="AWAY_WINS"~pep_home_point$n*0
+                                     )
+    head(pep_home_point)
+    ## Pep points at away grounds
+    pep_away_point<-pep_away%>%
+      group_by(FTR)%>%
+      count(FTR)
+    pep_away_point$points<-case_when(pep_away_point$FTR=="AWAY_WINS"~pep_away_point$n*3,
+                                     pep_away_point$FTR=="HOME_WINS"~pep_away_point$n*0,
+                                     pep_away_point$FTR=="DRAWS"~pep_away_point$n*1
+                                     )
+    head(pep_away_point)
+
+    ## pep goals:
+
+    ##home
+    pep_goals_home<-pep_home%>%
+      group_by(Home)%>%
+      summarize(all_home_goal=sum(pep_home$HomeGoals),all_home_goal_against=sum(pep_home$AwayGoals))
+     head(pep_goals_home) 
+    ##away
+    pep_goals_away<-pep_away%>%
+      group_by(Away)%>%
+      summarize(all_away_goal=sum(pep_away$AwayGoals),all_away_goal_against=sum(pep_away$HomeGoals))
+    head(pep_goals_home)
+    ```
+
+```{r}
+ggplot(data=pep_home_point,mapping = aes(x=FTR,y=n))+geom_col()+labs(title = " Pep Guardiola's number of wins draws and loses at Home")
+```
+
+From this chart we see that pep has 12 Home loses , 20 draws and 114 Home wins . We can now calculate Pep Home winning , losing and drawing probability .
+
+By calculating the probability using the equation $P(A) = {n(S) \over n(A)}$ Where:
+
+-   $P(A)$ is the probability of an outcome
+
+-   $n(S)$ is the number of favorable outcomes for event $A$.
+
+-   $n(S)$ is the total number of possible outcomes in the sample space.
+
+```{r}
+pep_home_point$Probability <- pep_home_point$n/146
+pep_home_point
+
+```
+
+We see from the probability that pep has $0.08$ of losing a home game , $0.14$ drawing at home and $0.78$ probability of wining at home.
+
+We move to pep probability of away games
+
+```{r}
+pep_away_point %>% ggplot(mapping = aes(x=FTR,y=n))+geom_col()+labs(title = "Pep Guardiola's number of away wins , loses and draws")
+```
+
+We will now calculate his home wining probability.
+
+```{r}
+pep_away_point$probablity<- pep_away_point$n/145
+pep_away_point
+```
+
+We see that Pep probability of wining away games is$0.689$, drawing $0.131$ and losing of $0.18$.
+
+-   We now move to Liverpool coach **Jürgen Klopp**
+
+    ![](images/klooppp.jpg){width="642"}
+
+Klopp took over as manager of Liverpool in 2015 and has since led the team to significant success. Under his guidance, Liverpool reached the UEFA Champions League finals in 2018 and 2022, securing victory in 2019, their sixth title in the competition. In the 2018-19 Premier League season, Liverpool finished second with 97 points, the third-highest total in English top division history. Klopp's team then won the UEFA Super Cup and FIFA Club World Cup in the following season. In 2019-20, Klopp led Liverpool to their first Premier League title, setting a club record of 99 points and breaking various top-flight records. His achievements earned him consecutive FIFA Coach of the Year awards in 2019 and 2020
+
+```{r}
+## new subset with home results of Liverpool during the period of Klopp
+    klopp_home<-subset(PL_r,Home=="Liverpool"&Season_End_Year>=2015)%>%
+      arrange(Season_End_Year,Wk)
+    head(klopp_home)
+
+    ## new subset with away results of Manchester City during the period of klopp
+    klopp_away<-subset(PL_r,Away=="Manchester City"&Season_End_Year>=2015)%>%
+      arrange(Season_End_Year,Wk)
+    head(klopp_away)
+
+    ## Pep points at home ground
+    klopp_home_point<-klopp_home%>%
+      group_by(FTR)%>%
+      count(FTR)
+    klopp_home_point$points<-case_when(klopp_home_point$FTR=="HOME_WINS"~klopp_home_point$n*3,
+                                     klopp_home_point$FTR=="DRAWS"~klopp_home_point$n*1,
+                                     klopp_home_point$FTR=="AWAY_WINS"~klopp_home_point$n*0
+                                     )
+    head(klopp_home_point)
+    ## Pep points at away grounds
+    klopp_away_point<-klopp_away%>%
+      group_by(FTR)%>%
+      count(FTR)
+    klopp_away_point$points<-case_when(klopp_away_point$FTR=="AWAY_WINS"~klopp_away_point$n*3,
+                                     klopp_away_point$FTR=="HOME_WINS"~klopp_away_point$n*0,
+                                     klopp_away_point$FTR=="DRAWS"~klopp_away_point$n*1
+                                     )
+    head(klopp_away_point)
+
+    ## pep goals:
+
+    ##home
+    klopp_goals_home<-klopp_home%>%
+      group_by(Home)%>%
+      summarize(all_home_goal=sum(klopp_home$HomeGoals),all_home_goal_against=sum(klopp_home$AwayGoals))
+     head(klopp_goals_home) 
+    ##away
+    klopp_goals_away<-klopp_away%>%
+      group_by(Away)%>%
+      summarize(all_away_goal=sum(klopp_away$AwayGoals),all_away_goal_against=sum(klopp_away$HomeGoals))
+    head(klopp_goals_home)
+```
+
+We no use the visual to the number of wins draws and losses for Klopp
+
+```{r}
+klopp_home_point %>% ggplot(mapping=aes(x=FTR,y=n))+geom_col()+ggtitle("Klopps games won,drawed and lost at Home")+xlab("Full time home Resulty")+ylab("Number of home games")
+```
+
+Lets now calculate klopps probablity of wining home , Draw and losing at home
+
+```{r}
+klopp_home_point$Probability <- klopp_home_point$n/183
+klopp_home_point
+```
+
+We see that Klopp has 0.68 chances of winning home ,0.23 of drawing and 0.0874 of losing
+
+**Let now move to away games for klopp**
+
+```{r}
+klopp_away_point %>% ggplot(mapping = aes(x=FTR,y=n))+geom_col()+ggtitle("Klopps aways games")+xlab("Full time away Resulty")+ylab("Number of away games")
+```
+
+Lets now calculate the probability of klopp wining away games
+
+```{r}
+klopp_away_point$Probabilty<-klopp_away_point$n/183
+klopp_away_point
+```
+
+We see that Klopp away wining is $0.64$, Draws is $0.16$,losing $0.197$ away games .
+
+-   We now move to Chelsea manger José Mourinho.
+
+    ![](images/Jose.jpg){width="637"}
+
+    Jose Mourinho became the manager of Chelsea twice, from 2004 to 2007 and then again from 2013 to 2015. His first unveiling at Stamford Bridge on June 2, 2004, marked the arrival of the most accomplished manager in Chelsea's history. At just 41 years old, the Portuguese tactician had already secured major trophies including the European Cup, UEFA Cup, and domestic league title in his native Portugal, showcasing his remarkable success and pedigree in football management.
+
+```{r}
+## new subset with home results of Chelsea during the first period of Jose Mourinho
+jose1_home<-subset(PL_r,Home=="Chelsea"& Date>="2004-08-14"&Date<="2007-09-15")%>%
+  arrange(Season_End_Year,Wk)
+  head(jose1_home)
+  
+## new subset with away results of Chelsea during the first period of Jose Mourinho
+jose1_away<-subset(PL_r,Away=="Chelsea"& Date>="2004-08-14"&Date<="2007-09-15")%>%
+  arrange(Season_End_Year,Wk)
+head(jose1_away)
+
+##jose points at home ground
+jose1_home_point<-jose1_home%>%
+  group_by(FTR)%>%
+  count(FTR)
+jose1_home_point$points<-case_when(jose1_home_point$FTR=="HOME_WINS"~jose1_home_point$n*3,
+                                   jose1_home_point$FTR=="DRAWS"~jose1_home_point$n*1,
+                                   jose1_home_point$FTR=="AWAY_WINS"~jose1_home_point$n*0
+                                   )
+head(jose1_home_point)
+
+##jose points at away grounds
+jose1_away_point<-jose1_away%>%
+  group_by(FTR)%>%
+  count(FTR)
+jose1_away_point$points<-case_when(jose1_away_point$FTR=="AWAY_WINS"~jose1_away_point$n*3,
+                                   jose1_away_point$FTR=="HOME_WINS"~jose1_away_point$n*0,
+                                   jose1_away_point$FTR=="DRAWS"~jose1_away_point$n*1
+                                   )
+jose1_away_point
+
+## jose goals:
+
+##home
+jose1_goals_home<-jose1_home%>%
+  group_by(Home)%>%
+  summarize(all_home_goal=sum(jose1_home$HomeGoals),all_home_goal_against=sum(jose1_home$AwayGoals))
+  head(jose1_goals_home)
+##away
+jose1_goals_away<-jose1_away%>%
+  group_by(Away)%>%
+  summarize(all_away_goal=sum(jose1_away$AwayGoals),all_away_goal_against=sum(jose1_away$HomeGoals))
+head(jose1_goals_away)
+```
+
+We now plot and see the number of wins on home games by Jose at home
+
+```{r}
+jose1_home_point %>% ggplot(mapping = aes(x=FTR,y=n))+geom_col()+ggtitle("Jose Home games")+xlab("Full time away Resulty")+ylab("Number of away games")
+```
+
+Lets now calculate the probability of Jose wining home games
+
+```{r}
+jose1_home_point$Probabity<-jose1_home_point$n/60
+jose1_home_point
+```
+
+We see from the probability that jose had $0.766$ wining home games and $0.233$ of drawing
+
+Let now move to away games
+
+```{r}
+jose1_away_point %>% ggplot(mapping = aes(x=FTR,y=n))+geom_col()+ggtitle("Jose away games")
+```
+
+Let now calculate the probability of jose's away gamws
+
+```{r}
+jose1_away_point$Probability<-jose1_away_point$n/60
+jose1_away_point
+```
+
+We see that jose has $0.65$ Chances of wining aways games and $0.167$ of losing .
+
+**Conclusion on the best coach based on the probability of wining home and away.**
+
+By comparing the probability of the above Coaches we see that pep has the highest chance of winning home games which is $0.78$ followed by Jose with the probability of $0.767$ Thus we can conclude that on home games pep is the best coach . lets now consider away game , and see the best performing coach for away games .We see that for away games pep has the highest probability which is $0.689$ followed by klopp with the probability of $0.683$. And we can conclude that Pep is the best coach in EPL.
+
+```{r}
+# Creating a tibble
+my_table <- tibble(Coach_name =c("Sir_Alex","Pep","Klopp","Jose"),Prob_of_wining_away_games= c(0.55,0.689,0.683,0.65),prob_of_home_games=c(0.75,0.781,0.68,0.767) )
+my_table
+```
+
+```{r}
+my_table$sum_of_prob<-my_table$Prob_of_wining_away_games+my_table$prob_of_home_games
+my_table
+```
+
+```{r}
+my_table %>% ggplot(mapping = aes(x=Coach_name,y=sum_of_prob))+geom_col()+coord_flip()+ggtitle("The best Coach in the Premier Legue ")
+```
